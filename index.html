@@ -734,7 +734,7 @@
     /* ═══ TIRA DE KPI ══════════════════════════════════════════════════ */
     .kpis {
       display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 0;
       margin-top: clamp(34px, 4.5vw, 56px);
       border-top: 1px solid var(--line);
@@ -2811,8 +2811,18 @@
       </div>
 
       <div class="fgroup">
-        <div class="rail-h" id="h-loc">Ubicación</div>
-        <div class="chips-f" id="f-loc" role="group" aria-labelledby="h-loc"></div>
+        <button class="qfold-btn" id="locfold" type="button" aria-expanded="false" aria-controls="locfold-list">
+          <span id="h-loc">Ubicación del encuestado</span>
+          <svg class="caret" width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+            <path d="M3 4.5 6 7.5l3-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"
+              stroke-linejoin="round" />
+          </svg>
+        </button>
+        <div class="qfold-list" id="locfold-list" inert>
+          <div class="qfold-inner">
+            <div class="chips-f" id="f-loc" role="group" aria-labelledby="h-loc"></div>
+          </div>
+        </div>
       </div>
 
       <button class="rail-reset" id="reset" type="button" disabled>Limpiar filtros</button>
@@ -2948,7 +2958,7 @@
             quienes responden «Sí, lo compraré» a la pregunta de probabilidad de compra.</li>
           <li>Las cifras de visibilidad (vistas únicas, clics, participaciones y encuestas completadas) proceden del
             panel digital de la activación y son fijas: no dependen de los filtros.</li>
-          <li>Benchmark Fragancias: valoración del aroma de 7,7 sobre 10 y 48% de intención de compra. Las píldoras
+          <li>Benchmark Fragancias: valoración del aroma de 7,7 sobre 10 y 40% de intención de compra. Las píldoras
             de los KPI muestran la diferencia relativa respecto a ese benchmark: (dato del informe ÷ benchmark − 1)
             × 100. Por ejemplo, una valoración de 8,09 frente a 7,7 es +5,1%. Es una diferencia en porcentaje del
             valor de referencia, no en puntos porcentuales. Verde (▲) indica por encima del benchmark y rojo (▼) por
@@ -3114,7 +3124,7 @@
     /* El modelo se reconstruye cada vez que entran datos nuevos, así que
        nada de esto puede ser constante: los agregadores leen `IX`,
        `ROWS` y `DATA.cats` en el momento de la llamada, no al cargar. */
-    let DATA = SEED, IX = {}, ROWS = SEED.rows, I_GEN = 0, I_AGE = 1, I_LOC = 2;
+    let DATA = SEED, IX = {}, ROWS = SEED.rows, I_GEN = 0, I_AGE = 1, I_STATE = 2;
     let IS_LIVE = false;
     function rebuildModel(d) {
       DATA = d;
@@ -3123,7 +3133,7 @@
       ROWS = DATA.rows;
       I_GEN = IX.gender;
       I_AGE = IX.age;
-      I_LOC = IX.location;
+      I_STATE = IX.state === undefined ? IX.location : IX.state;
       VIEW = ROWS;
     }
 
@@ -3146,7 +3156,7 @@
     const FILT = { gen: new Set(), age: new Set(), loc: new Set() };
     function passes(r) {
       if (FILT.gen.size && !FILT.gen.has(r[I_GEN])) return false;
-      if (FILT.loc.size && !FILT.loc.has(r[I_LOC])) return false;
+      if (FILT.loc.size && !FILT.loc.has(r[I_STATE])) return false;
       if (FILT.age.size) {
         const b = bandOfAge(r[I_AGE]);
         if (!b || !FILT.age.has(b)) return false;
@@ -3308,7 +3318,7 @@
     /* ── Definición del informe ─────────────────────────────────── */
     /* Benchmark Fragancias: valoración del aroma (1-10) y % que comprarían. */
     const BENCH_NOTA = 7.7;
-    const BENCH_INTEN = 48;
+    const BENCH_INTEN = 40;
 
     const Q = {
       q1: {
@@ -4216,10 +4226,10 @@
               borderColor: sr.c,
               backgroundColor: isV ? 'rgba(15,23,41,.08)' : sr.c,
               borderWidth: isV ? 1.6 : 2.4,
-              stepped: 'middle',
+              tension: 0.35,
               pointRadius: isV ? 0 : 3.2,
               pointHoverRadius: isV ? 3 : 5,
-              pointBackgroundColor: '#fff',
+              pointBackgroundColor: sr.c,
               pointBorderWidth: 2,
               fill: isV ? 'origin' : false,
               yAxisID: isV ? 'y' : 'y1',
@@ -4299,6 +4309,7 @@
         + `</div>`;
 
       $('#kpis').innerHTML =
+        kpi('30.000', '', 'Samplings entregados', '') +
         kpi(nf(VIEW.length), '', 'Encuestados',
           isFiltered() ? 'de ' + nf(ROWS.length) + ' en total' : 'muestra completa') +
         kpi(nota.n ? df(nota.mean, 2) : '—', nota.n ? '/10' : '', 'Valoración del aroma',
@@ -4526,12 +4537,18 @@
     function buildFilters() {
       $('#f-gen').innerHTML = [0, 1].map(k => chipBtn('gen', k, GEN_LABEL[k])).join('');
       $('#f-age').innerHTML = BANDS.map(b => chipBtn('age', b, b)).join('');
-      const locs = DATA.cats.location || [];
-      $('#f-loc').innerHTML = locs.map((l, i) => chipBtn('loc', i, l)).join('');
+      const locs = DATA.cats.state || DATA.cats.location || [];
+      $('#f-loc').innerHTML = locs.map((l, i) => chipBtn('loc', i, stateLabel(l))).join('');
       const g = $('#f-loc').closest('.fgroup');
       if (g) g.hidden = !locs.length;
       if (filtersWired) return;
       filtersWired = true;
+      const locFold = $('#locfold'), locList = $('#locfold-list');
+      locFold.addEventListener('click', () => {
+        const expanded = locFold.getAttribute('aria-expanded') !== 'true';
+        locFold.setAttribute('aria-expanded', String(expanded));
+        locList.inert = !expanded;
+      });
       $('#rail').addEventListener('click', e => {
         const btn = e.target.closest('.chip-f');
         if (!btn) return;
@@ -4563,7 +4580,7 @@
         if (FILT.gen.size) bits.push('Género: ' + [...FILT.gen].sort().map(k => GEN_LABEL[k]).join(', '));
         if (FILT.age.size) bits.push('Edad: ' + BANDS.filter(b => FILT.age.has(b)).join(', '));
         if (FILT.loc.size) bits.push('Ubicación: ' + [...FILT.loc].sort((a, b) => a - b)
-          .map(i => (DATA.cats.location || [])[i]).filter(Boolean).join(', '));
+          .map(i => stateLabel((DATA.cats.state || DATA.cats.location || [])[i])).filter(Boolean).join(', '));
         $('#fbar-txt').innerHTML = 'Filtro activo · ' + esc(bits.join(' · '))
           + ' · <b>' + nf(VIEW.length) + '</b> de ' + nf(ROWS.length) + ' encuestados';
         bar.classList.add('on');
@@ -4883,6 +4900,12 @@
     }
 
     const txt = v => (v === null || v === undefined) ? '' : String(v).trim();
+    const stateLabel = v => {
+      const value = txt(v).toLocaleLowerCase('es');
+      if (value.startsWith('madrid')) return 'Madrid';
+      if (value.startsWith('barcelona')) return 'Barcelona';
+      return 'Otras ciudades';
+    };
 
     function toGender(v) {
       const t = txt(v);
@@ -4915,19 +4938,21 @@
       const key = name => head[name];
 
       const kGen = key('gender'), kAge = key('user_age') || key('age');
-      const kLoc = key('location') || key('ubicacion') || key('ubicación');
+      const kState = key('state');
       const kUid = key('uid');
-      const cols = ['gender', 'age', 'location'];
-      /* Ubicaciones: catálogo por volumen, como el resto de categorías. */
-      const lf = new Map();
-      if (kLoc) for (const r of recs) {
-        const v = txt(r[kLoc]);
-        if (v) lf.set(v, (lf.get(v) || 0) + 1);
+      const cols = ['gender', 'age', 'state'];
+      /* Agrupa las ubicaciones en las dos ciudades principales y el resto. */
+      const stateFreq = new Map();
+      if (kState) for (const r of recs) {
+        const v = txt(r[kState]);
+        if (v) {
+          const label = stateLabel(v);
+          stateFreq.set(label, (stateFreq.get(label) || 0) + 1);
+        }
       }
-      const locList = [...lf.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'es'))
-        .map(e => e[0]);
-      const locMap = new Map(locList.map((v, i) => [v, i]));
-      const cats = { location: locList };
+      const stateList = ['Madrid', 'Barcelona', 'Otras ciudades'].filter(v => stateFreq.has(v));
+      const stateMap = new Map(stateList.map((v, i) => [v, i]));
+      const cats = { state: stateList };
       const order = [];
 
       for (const q of QCFG) {
@@ -4962,8 +4987,8 @@
         }
         /* Una fila sin edad ni ninguna respuesta no es un encuestado: es
            una fila en blanco al final de la hoja. */
-        const loc = kLoc ? locMap.get(txt(r[kLoc])) : undefined;
-        const row = [toGender(kGen ? r[kGen] : ''), toAge(kAge ? r[kAge] : ''), loc === undefined ? -1 : loc];
+        const state = kState ? stateMap.get(stateLabel(r[kState])) : undefined;
+        const row = [toGender(kGen ? r[kGen] : ''), toAge(kAge ? r[kAge] : ''), state === undefined ? -1 : state];
         let any = false;
         for (const o of order) {
           if (!o.k) { row.push(o.q.kind === 'multi' ? [] : -1); continue; }
